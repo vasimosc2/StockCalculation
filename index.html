@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Average Price Target Calculator</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Average Price Calculator</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
+
 <body>
   <div class="bg-blobs" aria-hidden="true">
     <div class="blob b1"></div>
@@ -13,136 +14,157 @@
     <div class="blob b3"></div>
   </div>
 
-  <main class="container">
-    <header class="header">
+  <div class="container">
+    <div class="header">
       <div>
-        <h1>Average Price Target Calculator</h1>
-        <p class="sub">Enter your position and price targets. We’ll compute how many shares to buy at the current price to reach your target average.</p>
+        <h1>Average Price Calculator</h1>
+        <p class="sub">
+          Reach a target average, simulate buying X shares, or simulate spending a EUR budget.
+          Stock price is always in USD. Includes a live USD→EUR conversion rate.
+        </p>
       </div>
 
-      <button id="themeBtn" class="btn ghost" type="button" aria-label="Toggle theme">
-        <span class="icon" aria-hidden="true">◐</span>
-        <span class="btnText">Theme</span>
+      <button id="themeBtn" class="btn ghost" type="button">
+        <span class="icon">🌓</span> Theme
       </button>
-    </header>
+    </div>
 
-    <section class="grid">
-      <!-- Inputs -->
+    <div class="grid">
+      <!-- INPUTS -->
       <div class="card">
         <div class="cardHead">
           <h2>Inputs</h2>
-          <span class="pill">Single stock</span>
+          <span class="pill subtle">v5</span>
         </div>
 
+        <!-- 2x2 grid with a SLOT card -->
         <div class="cards4">
           <div class="miniCard">
-            <div class="miniLabel">Shares you have</div>
-            <input id="sharesHave" inputmode="decimal" type="number" min="0" step="1" placeholder="e.g. 120" />
-            <div class="hint">Your current number of shares</div>
+            <div class="miniLabel">Shares you have (N)</div>
+            <input id="sharesHave" type="number" min="0" step="1" placeholder="e.g. 120" />
+            <div class="hint">Total shares you currently hold.</div>
           </div>
 
           <div class="miniCard">
-            <div class="miniLabel">Your average price</div>
+            <div class="miniLabel">Current average price (A)</div>
             <div class="row">
-              <input id="avgPrice" inputmode="decimal" type="number" min="0" step="0.0001" placeholder="e.g. 85.50" />
-              <span class="suffix">/share</span>
+              <input id="avgPrice" type="number" min="0" step="0.0001" placeholder="e.g. 18.50" />
+              <span class="suffix">USD</span>
             </div>
-            <div class="hint">Current cost basis ÷ shares</div>
+            <div class="hint">Your current average cost per share.</div>
+          </div>
+
+          <!-- SLOT: Target average -->
+          <div class="miniCard" id="slotTarget">
+            <div class="miniLabel">Target average (T)</div>
+            <div class="row">
+              <input id="targetAvg" type="number" min="0" step="0.0001" placeholder="e.g. 15.00" />
+              <span class="suffix">USD</span>
+            </div>
+            <div class="hint">Used in “Reach target average” mode.</div>
+          </div>
+
+          <!-- SLOT: Buy X -->
+          <div class="miniCard" id="slotBuyX" style="display:none;">
+            <div class="miniLabel">Shares to buy (X)</div>
+            <input id="buyX" type="number" min="0" step="1" placeholder="e.g. 25" />
+            <div class="hint">Simulate buying X shares at the current price (USD).</div>
+          </div>
+
+          <!-- SLOT: Budget EUR -->
+          <div class="miniCard" id="slotBudget" style="display:none;">
+            <div class="miniLabel">Budget (EUR)</div>
+            <input id="budgetEur" type="number" min="0" step="0.01" placeholder="e.g. 500" />
+            <div class="hint">We convert EUR→USD using the live rate. Stock price stays in USD.</div>
           </div>
 
           <div class="miniCard">
-            <div class="miniLabel">Target average price</div>
+            <div class="miniLabel">Current price (C)</div>
             <div class="row">
-              <input id="targetAvg" inputmode="decimal" type="number" min="0" step="0.0001" placeholder="e.g. 80.00" />
-              <span class="suffix">/share</span>
+              <input id="currentPrice" type="number" min="0" step="0.0001" placeholder="e.g. 12.10" />
+              <span class="suffix">USD</span>
             </div>
-            <div class="hint">The average you want to reach</div>
-          </div>
-
-          <div class="miniCard">
-            <div class="miniLabel">Current market price</div>
-            <div class="row">
-              <input id="currentPrice" inputmode="decimal" type="number" min="0" step="0.0001" placeholder="e.g. 72.30" />
-              <span class="suffix">/share</span>
-            </div>
-            <div class="hint">Price you can buy at now</div>
+            <div class="hint">Price you would buy at now (USD).</div>
           </div>
         </div>
 
-        <div class="actions">
-          <button id="calcBtn" class="btn primary" type="button">Calculate</button>
-          <button id="resetBtn" class="btn" type="button">Reset</button>
+        <!-- MODE + live -->
+        <div class="row" style="margin-top:12px; gap:12px; flex-wrap:wrap;">
+          <span class="suffix">Mode</span>
+          <select id="mode" class="modeSelect">
+            <option value="targetAvg" selected>Reach target average</option>
+            <option value="buyX">What if I buy X shares?</option>
+            <option value="spendBudget">What if I spend a budget?</option>
+          </select>
+
           <label class="toggle">
             <input id="liveToggle" type="checkbox" checked />
-            <span>Live calculate</span>
+            Live calculate
           </label>
         </div>
 
-        <div id="message" class="message" role="status" aria-live="polite"></div>
+        <!-- FX -->
+        <div class="row" style="margin-top:12px; align-items:center;">
+          <span class="suffix">USD→EUR rate</span>
+          <strong id="fxRate" style="margin-left:auto;">—</strong>
+
+          <button id="fxRefreshBtn" class="btn ghost" type="button" style="margin-left:10px;">
+            <span class="icon">↻</span> Refresh
+          </button>
+        </div>
+        <div class="hint" id="fxMeta">Source: Frankfurter (ECB).</div>
+
+        <!-- ACTIONS -->
+        <div class="actions">
+          <button id="calcBtn" class="btn primary" type="button">
+            <span class="icon">🧮</span> Calculate
+          </button>
+          <button id="resetBtn" class="btn" type="button">
+            <span class="icon">🧹</span> Reset
+          </button>
+        </div>
+
+        <div id="message" class="message warn"></div>
       </div>
 
-      <!-- Outputs -->
+      <!-- OUTPUTS -->
       <div class="card">
         <div class="cardHead">
-          <h2>Result</h2>
-          <span class="pill subtle">What to buy</span>
+          <h2>Results</h2>
+          <span class="pill">Outputs</span>
         </div>
 
-        <div class="resultGrid">
-          <div class="resultBox accent">
-            <div class="k">Shares to buy</div>
-            <div id="sharesToBuy" class="v">—</div>
-            <div class="d">Rounded up to whole shares</div>
+        <!-- Removed “Current total cost” and “New total cost” -->
+        <div class="cards4">
+          <div class="miniCard">
+            <div class="miniLabel">Shares to buy</div>
+            <div id="sharesToBuy">—</div>
           </div>
 
-          <div class="resultBox">
-            <div class="k">Money to spend</div>
-            <div id="moneyToSpend" class="v">—</div>
-            <div class="d">At the current price</div>
+          <div class="miniCard">
+            <div class="miniLabel">Money to spend (USD)</div>
+            <div id="moneyToSpend">—</div>
+            <div class="hint" id="moneyToSpendAlt">—</div>
           </div>
 
-          <div class="resultBox">
-            <div class="k">New total shares</div>
-            <div id="newTotalShares" class="v">—</div>
-            <div class="d">After buying</div>
+          <div class="miniCard">
+            <div class="miniLabel">New total shares</div>
+            <div id="newTotalShares">—</div>
           </div>
 
-          <div class="resultBox">
-            <div class="k">New average price</div>
-            <div id="newAvgPrice" class="v">—</div>
-            <div class="d">Should meet the target (or below)</div>
+          <div class="miniCard">
+            <div class="miniLabel">New average price (USD)</div>
+            <div id="newAvgPrice">—</div>
           </div>
         </div>
 
-        <details class="details">
-          <summary>Show calculation details</summary>
-          <div class="detailGrid">
-            <div class="detailItem">
-              <div class="k">Current cost basis</div>
-              <div id="currentCost" class="v small">—</div>
-            </div>
-            <div class="detailItem">
-              <div class="k">New cost basis</div>
-              <div id="newCost" class="v small">—</div>
-            </div>
-            <div class="detailItem">
-              <div class="k">Formula</div>
-              <div class="mono">
-                x = N·(T − A) / (C − T)
-              </div>
-              <div class="hint">N=shares, A=avg, T=target avg, C=current price</div>
-            </div>
-          </div>
-        </details>
+        <div class="hint" style="margin-top:12px;">
+          In “Spend budget” mode, you input EUR but calculations use USD after conversion.
+        </div>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <footer class="footer">
-      <span>Tip: If the current price is above your target average, averaging down to that target may be impossible.</span>
-    </footer>
-  </main>
-
-  <script src="script.js"></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
-
