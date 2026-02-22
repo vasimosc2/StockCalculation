@@ -31,7 +31,7 @@ const els = {
   fxRefreshBtn: document.getElementById("fxRefreshBtn"),
 };
 
-// ---------- Formatting ----------
+// ---------- Helpers ----------
 function fmtMoneyCurrency(n, currency) {
   if (!Number.isFinite(n)) return "—";
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
@@ -39,6 +39,20 @@ function fmtMoneyCurrency(n, currency) {
 function fmtNum(n, digits = 4) {
   if (!Number.isFinite(n)) return "—";
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }).format(n);
+}
+
+// Floor to N decimals (prevents exceeding budget due to rounding)
+function floorTo(n, decimals = 2) {
+  if (!Number.isFinite(n)) return NaN;
+  const f = 10 ** decimals;
+  return Math.floor(n * f) / f;
+}
+
+// Round to N decimals (useful for normalizing typed input)
+function roundTo(n, decimals = 2) {
+  if (!Number.isFinite(n)) return NaN;
+  const f = 10 ** decimals;
+  return Math.round(n * f) / f;
 }
 
 function setMessage(text, kind = "") {
@@ -122,14 +136,14 @@ function compute() {
   const { N, A, T, C } = readInputs();
   const mode = els.mode.value;
 
-  // Shared validation (stock price always USD)
+  // Shared validation
   if (![N, A, C].every(Number.isFinite) || N < 0 || A < 0 || C < 0) {
     setMessage("Enter valid non-negative numbers for shares, avg price (USD), and current price (USD).", "warn");
     clearOutputs();
     return;
   }
 
-  // Mode 1: Reach target average
+  // Mode 1: Reach target average (kept as whole shares)
   if (mode === "targetAvg") {
     if (!Number.isFinite(T) || T < 0) {
       setMessage("Enter a valid non-negative target average (USD).", "warn");
@@ -165,7 +179,7 @@ function compute() {
       return;
     }
 
-    const xRounded = Math.ceil(xExact);
+    const xRounded = Math.ceil(xExact); // whole shares here
     updateOutputs({ N, A, C, sharesToBuy: xRounded });
 
     const avgAfterRounded = (N * A + xRounded * C) / (N + xRounded);
@@ -177,23 +191,24 @@ function compute() {
     return;
   }
 
-  // Mode 2: What if I buy X shares?
+  // Mode 2: What if I buy X shares? (ALLOW decimals, 2dp)
   if (mode === "buyX") {
-    const X = Number(els.buyX.value);
-    if (!Number.isFinite(X) || X < 0) {
+    const Xraw = Number(els.buyX.value);
+    if (!Number.isFinite(Xraw) || Xraw < 0) {
       setMessage("Enter a valid non-negative number of shares to buy (X).", "warn");
       clearOutputs();
       return;
     }
-    const sharesToBuy = Math.floor(X);
+
+    const sharesToBuy = roundTo(Xraw, 2);
     updateOutputs({ N, A, C, sharesToBuy });
 
     const newAvg = (N * A + sharesToBuy * C) / (N + sharesToBuy);
-    setMessage(`If you buy ${sharesToBuy} shares, your new average becomes ${fmtNum(newAvg, 6)} USD.`, "ok");
+    setMessage(`If you buy ${fmtNum(sharesToBuy, 2)} shares, your new average becomes ${fmtNum(newAvg, 6)} USD.`, "ok");
     return;
   }
 
-  // Mode 3: Spend a EUR budget (convert EUR→USD, stock price is USD)
+  // Mode 3: Spend a EUR budget (ALLOW decimals, 2dp, and DO NOT exceed budget)
   if (mode === "spendBudget") {
     const budgetEur = Number(els.budgetEur.value);
     if (!Number.isFinite(budgetEur) || budgetEur < 0) {
@@ -215,7 +230,16 @@ function compute() {
     // 1 USD = r EUR  => USD = EUR / r
     const budgetUsd = budgetEur / FX.usdToEur;
 
-    const sharesToBuy = Math.floor(budgetUsd / C);
+    // fractional shares allowed: floor to 2dp so spent <= budget
+    const sharesRaw = budgetUsd / C;
+    const sharesToBuy = floorTo(sharesRaw, 2);
+
+    if (!Number.isFinite(sharesToBuy) || sharesToBuy <= 0) {
+      setMessage("Budget is too small to buy any shares at the current price.", "warn");
+      clearOutputs();
+      return;
+    }
+
     updateOutputs({ N, A, C, sharesToBuy });
 
     const spentUsd = sharesToBuy * C;
@@ -223,7 +247,7 @@ function compute() {
     const newAvg = (N * A + sharesToBuy * C) / (N + sharesToBuy);
 
     setMessage(
-      `EUR budget ≈ ${fmtMoneyCurrency(budgetUsd, "USD")} → buys ${sharesToBuy} shares. ` +
+      `EUR budget ≈ ${fmtMoneyCurrency(budgetUsd, "USD")} → buys ${fmtNum(sharesToBuy, 2)} shares. ` +
       `Spending: ${fmtMoneyCurrency(spentUsd, "USD")} (~${fmtMoneyCurrency(spentEur, "EUR")}). ` +
       `New average: ${fmtNum(newAvg, 6)} USD.`,
       "ok"
@@ -239,7 +263,8 @@ function updateOutputs({ N, A, C, sharesToBuy }) {
   const newShares = N + sharesToBuy;
   const newAvg = newShares > 0 ? ((N * A + sharesToBuy * C) / newShares) : NaN;
 
-  els.sharesToBuy.textContent = fmtNum(sharesToBuy, 0);
+  // Shares can be decimal now -> show up to 2 decimals
+  els.sharesToBuy.textContent = fmtNum(sharesToBuy, 2);
   els.moneyToSpend.textContent = fmtMoneyCurrency(moneyUsd, "USD");
 
   if (Number.isFinite(FX.usdToEur) && FX.usdToEur > 0) {
@@ -249,7 +274,8 @@ function updateOutputs({ N, A, C, sharesToBuy }) {
     els.moneyToSpendAlt.textContent = "≈ EUR: — (fetch rate)";
   }
 
-  els.newTotalShares.textContent = fmtNum(newShares, 0);
+  // total shares can be decimal too
+  els.newTotalShares.textContent = fmtNum(newShares, 2);
   els.newAvgPrice.textContent = fmtNum(newAvg, 6);
 }
 
